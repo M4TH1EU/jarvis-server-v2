@@ -38,7 +38,7 @@ def text_recognition_whisperasr(audio_file):
     }
 
     # TODO: add to config
-    response = requests.post('http://192.168.1.208:9000/asr', params=params, headers=headers, files=files)
+    response = requests.post('https://whisper.broillet.ch/asr', params=params, headers=headers, files=files)
     return json.loads(response.text)['text']
 
 
