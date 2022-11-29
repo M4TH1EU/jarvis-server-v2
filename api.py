@@ -64,7 +64,3 @@ def start_server():
     app.config['JSON_AS_ASCII'] = False
     # TODO: add to config
     app.run(port=5000, debug=False, host='0.0.0.0', threaded=True)
-
-
-if __name__ == '__main__':
-    start_server()
