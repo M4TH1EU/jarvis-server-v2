@@ -10,7 +10,7 @@ app = Flask(__name__)
 
 
 # .WAV (i.e.) FILE REQUEST
-@app.route("/process_audio_request_file", methods=['POST'])
+@app.route("/process_voice", methods=['POST'])
 def process_audio_request_android():
     print("[" + request.remote_addr + "] - New STT request")
 
@@ -22,7 +22,7 @@ def process_audio_request_android():
 
     # TODO: send to each skill to answer the questions
 
-    return {"transcription": text, "answer": "I'm still learning how to respond to that..."}
+    return {"transcription": text, "status": 200}
 
 
 @app.route("/process_text", methods=['POST'])
