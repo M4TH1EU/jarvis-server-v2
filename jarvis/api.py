@@ -4,6 +4,8 @@ import tempfile
 import requests
 from flask import request, Flask
 
+from jarvis.skills import intent_manager
+
 app = Flask(__name__)
 
 
@@ -16,7 +18,22 @@ def process_audio_request_android():
     audio_temp_file.write(request.data)
     print(audio_temp_file.name)
 
-    return {"transcription": text_recognition_whisperasr(audio_temp_file.name), "answer": "WIP"}
+    text = text_recognition_whisperasr(audio_temp_file.name)
+
+    # TODO: send to each skill to answer the questions
+
+    return {"transcription": text, "answer": "I'm still learning how to respond to that..."}
+
+
+@app.route("/process_text", methods=['POST'])
+def process_text():
+    print("[" + request.remote_addr + "] - New TXT request")
+
+    text = request.values['text']
+
+    answer = intent_manager.recognise(text, request.headers.get('Client-Ip'), request.headers.get('Client-Port'))
+
+    return {"transcription": text, "answer": answer}
 
 
 # send request to whisper-asr server (docker)
