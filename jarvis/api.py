@@ -1,30 +1,119 @@
 import json
 import tempfile
+from threading import Lock
 
 import requests
-from flask import request, Flask
+from flask import Flask, render_template, session, request, \
+    copy_current_request_context
+from flask_socketio import SocketIO, emit, join_room, leave_room, \
+    close_room, rooms, disconnect
 
-from jarvis.skills import intent_manager
+
+# Set this variable to "threading", "eventlet" or "gevent" to test the
+# different async modes, or leave it set to None for the application to choose
+# the best option based on installed packages.
+async_mode = None
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, async_mode=async_mode)
+thread = None
+thread_lock = Lock()
+
+
+@app.route('/')
+def index():
+    # return render_template('index.html', async_mode=socketio.async_mode)
+    return "Welcome to Jarvis Server API !"
+
+
+@socketio.event
+def process_message(message):
+    message = json.loads(message)
+
+    text = message['data']
+
+    send_jarvis_message_to_room(text, message['uuid'])
+
+    emit('my_response', message)
+
+
+@socketio.event
+def my_broadcast_event(message):
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': message['data'], 'count': session['receive_count']},
+         broadcast=True)
+
+
+@socketio.event
+def join(message):
+    message = json.loads(message)
+    join_room(message['uuid'])
+
+
+@socketio.event
+def leave(message):
+    leave_room(message['uuid'])
+    emit('my_response','In rooms: ' + ', '.join(rooms()))
+
+
+@socketio.on('close_room')
+def on_close_room(message):
+    emit('my_response', {'data': 'Room ' + message['room'] + ' is closing.',
+                         'count': session['receive_count']},
+         to=message['room'])
+    close_room(message['room'])
+
+
+@socketio.event
+def disconnect_request():
+    @copy_current_request_context
+    def can_disconnect():
+        disconnect()
+
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    # for this emit we use a callback function
+    # when the callback function is invoked we know that the message has been
+    # received and it is safe to disconnect
+    emit('my_response', {'data': 'Disconnected!', 'count': session['receive_count']}, callback=can_disconnect)
+
+
+@socketio.event
+def connect():
+    global thread
+    emit('my_response', {'data': 'Connected', 'count': 0})
+
+
+@socketio.on('disconnect')
+def test_disconnect():
+    print('Client disconnected', request.sid)
+
+
+def send_user_message_to_room(text, room_id):
+    socketio.emit('message_from_user', {'data': text, "uuid": room_id}, to=room_id)
+
+
+def send_jarvis_message_to_room(text, room_id):
+    socketio.emit('message_from_jarvis', {'data': text, "uuid": room_id}, to=room_id)
 
 
 # .WAV (i.e.) FILE REQUEST
-@app.route("/process_voice", methods=['POST'])
-def process_audio_request_android():
+@app.route("/get_text_from_audio", methods=['POST'])
+def get_text_from_audio():
     print("[" + request.remote_addr + "] - New STT request")
 
     audio_temp_file = tempfile.NamedTemporaryFile(prefix='jarvis-audio_', suffix='_client')
     audio_temp_file.write(request.data)
     print(audio_temp_file.name)
 
-    text = text_recognition_whisperasr(audio_temp_file.name)
+    text = whisper_stt(audio_temp_file.name)
 
     # TODO: send to each skill to answer the questions
 
-    return {"transcription": text, "status": 200}
+    return {"data": text, "uuid": "null"}
 
-
+"""
 @app.route("/process_text", methods=['POST'])
 def process_text():
     print("[" + request.remote_addr + "] - New TXT request")
@@ -33,11 +122,11 @@ def process_text():
 
     answer = intent_manager.recognise(text, request.headers.get('Client-Ip'), request.headers.get('Client-Port'))
 
-    return {"transcription": text, "answer": answer}
+    return {"transcription": text, "answer": answer}"""
 
 
 # send request to whisper-asr server (docker)
-def text_recognition_whisperasr(audio_file):
+def whisper_stt(audio_file):
     headers = {
         'accept': 'application/json',
         # 'Content-Type': 'multipart/form-data',
@@ -59,25 +148,5 @@ def text_recognition_whisperasr(audio_file):
     return json.loads(response.text)['text']
 
 
-# NOT IMPLEMENTED RIGHT NOW / to use with local whisper cpp (cpu)
-"""
-def local_recognition(audio_file, time_of_request):
-    path = os.path.dirname(get_path_file.__file__)
-
-    print("Loading model and recognition")
-    model = path + "/whisper/models/" + "ggml-small.bin"
-    os.system(path + "/whisper/main -l fr -t 8 -m " + model + " -f " + audio_file + " -otxt")  # + "> /dev/null 2>&1")
-
-    output = open(audio_file + ".txt").read()
-
-    # time_of_resolution = time.perf_counter()
-    # print(output + f" - {time_of_resolution - time_of_request:0.4f} seconds")
-
-    return jsonify(transcription=output, time=5, answer="WIP...")
-"""
-
-
 def start_server():
-    app.config['JSON_AS_ASCII'] = False
-    # TODO: add to config
-    app.run(port=5000, debug=False, host='0.0.0.0', threaded=True)
+    socketio.run(app, host='0.0.0.0', port=6000, allow_unsafe_werkzeug=True)
