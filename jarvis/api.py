@@ -3,9 +3,10 @@ import tempfile
 from threading import Lock
 
 import requests
-from flask import Flask, request
+from flask import Flask, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room, \
     rooms
+from pywhispercpp.model import Model
 
 from jarvis.skills.intent_services import intent_manager
 
@@ -19,6 +20,7 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, async_mode=async_mode)
 thread = None
 thread_lock = Lock()
+model = Model('small')
 
 
 @app.route('/')
@@ -74,7 +76,8 @@ def get_text_from_audio():
     audio_temp_file = tempfile.NamedTemporaryFile(prefix='jarvis-audio_', suffix='_client')
     audio_temp_file.write(request.data)
 
-    text = whisper_stt(audio_temp_file.name)
+    # text = whisper_stt(audio_temp_file.name)
+    text = whisper_cpp_stt(audio_temp_file.name)
     print(text)
 
     return {"data": text, "uuid": "null"}
@@ -113,6 +116,17 @@ def whisper_stt(audio_file):
     # TODO: add to config
     response = requests.post('https://whisper.broillet.ch/asr', params=params, headers=headers, files=files)
     return json.loads(response.text)['text']
+
+
+def whisper_cpp_stt(audio_file):
+    segments = model.transcribe(audio_file, speed_up=False, translate=False)
+
+    # combines all segments in one string
+    text = ''
+    for segment in segments:
+        text += segment.text + ' '
+
+    return text
 
 
 def start_server():

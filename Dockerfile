@@ -2,9 +2,8 @@ FROM python:3.9-alpine
 
 ENV ENV_STATUS=${NODE_ENV:-production}
 
-# needed in older versions of jarvis-server
-# RUN apk update && apk upgrade
-# RUN apk add --no-cache --upgrade grep
+RUN apk update && apk upgrade
+RUN apk add --no-cache --upgrade ffmpeg
 
 WORKDIR /jarvis
 
