@@ -10,7 +10,7 @@ WORKDIR /jarvis
 COPY ./jarvis /jarvis
 
 # needed in older versions of jarvis-server
-# RUN apk add build-base python3 python3-dev py3-pip py3-distutils-extra py3-fann2 fann-dev swig
+RUN apk add py3-fann2 fann-dev swig
 
 COPY requirements.txt /jarvis/
 RUN python3 -m pip install --no-cache-dir -r requirements.txt
