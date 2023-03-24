@@ -1,14 +1,16 @@
 import json
+import sys
 import tempfile
 from threading import Lock
 
+import openai
 import requests
-from flask import Flask, request, jsonify
+from flask import Flask, request
 from flask_socketio import SocketIO, emit, join_room, leave_room, \
     rooms
 from pywhispercpp.model import Model
 
-from jarvis.skills.intent_services import intent_manager
+from jarvis.utils.chatgpt_utils import chatgpt_recognise
 
 # Set this variable to "threading", "eventlet" or "gevent" to test the
 # different async modes, or leave it set to None for the application to choose
@@ -20,7 +22,8 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, async_mode=async_mode)
 thread = None
 thread_lock = Lock()
-model = Model('small')
+model = Model('base', n_threads=16, suppress_non_speech_tokens=True)
+openai.api_key = sys.argv[1]
 
 
 @app.route('/')
@@ -36,9 +39,14 @@ def process_message(message):
     print("Message : " + message['data'])
     # TODO: maybe implement grammar check ?
 
-    intent_manager.recognise(message['data'], message['uuid'])
+    # intent_manager.recognise(message['data'], message['uuid'])
+    send_jarvis_message_to_room("I don't know how to respond to that...", message['uuid'])
 
-    send_jarvis_message_to_room(message['data'], message['uuid'])
+    response = chatgpt_recognise(message['data'])
+    if 'comment' in response:
+        send_user_message_to_room(response['comment'], message['uuid'])
+    else:
+        send_jarvis_message_to_room("I don't know how to respond to that...", message['uuid'])
 
 
 @socketio.event

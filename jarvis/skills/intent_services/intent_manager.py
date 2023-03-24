@@ -168,6 +168,7 @@ class SkillRegistering(type):
         for key, val in attrs.items():
             if type(val) is types.FunctionType and not str(val).__contains__("__"):
                 intent_type = getattr(val, "_type", None)
+                properties = None
 
                 if intent_type is not None:
                     properties = getattr(val, "_data", None)
